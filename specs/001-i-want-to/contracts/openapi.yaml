@@ -1,0 +1,317 @@
+openapi: 3.0.3
+info:
+  title: WRWW Voting Leaderboard API
+  description: API for movie/TV show voting and leaderboard
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+  - url: https://wrww.app/api
+    description: Production server
+
+paths:
+  /votes:
+    post:
+      summary: Submit a vote for content
+      operationId: submitVote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content_id
+                - vote_value
+                - session_id
+              properties:
+                content_id:
+                  type: integer
+                  description: TMDB content ID
+                  example: 550
+                vote_value:
+                  type: integer
+                  enum: [-1, 0, 1]
+                  description: Vote value (-1 left, 0 up, 1 right)
+                session_id:
+                  type: string
+                  format: uuid
+                  description: Browser session identifier
+      responses:
+        '201':
+          description: Vote submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  vote_id:
+                    type: string
+                    format: uuid
+                  message:
+                    type: string
+                    example: "Vote recorded"
+        '409':
+          description: Duplicate vote attempt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /movies/next:
+    get:
+      summary: Get next movie/show card to vote on
+      operationId: getNextCard
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Session ID to exclude already voted content
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, tv, all]
+            default: all
+          description: Filter by content type
+        - name: genre_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by genre
+      responses:
+        '200':
+          description: Next content card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentCard'
+        '204':
+          description: No more content available to vote on
+
+  /leaderboard:
+    get:
+      summary: Get top 10 leaderboard
+      operationId: getLeaderboard
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, tv, all]
+            default: all
+          description: Filter by content type
+        - name: genre_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by genre
+        - name: trending
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Show only trending (last 30 days)
+      responses:
+        '200':
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    maxItems: 10
+                    items:
+                      $ref: '#/components/schemas/LeaderboardEntry'
+                  updated_at:
+                    type: string
+                    format: date-time
+
+  /categories:
+    get:
+      summary: Get available categories/genres
+      operationId: getCategories
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [movie, tv, all]
+            default: all
+      responses:
+        '200':
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  genres:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        type:
+                          type: string
+                          enum: [movie, tv]
+                  trending:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                      count:
+                        type: integer
+                        description: Number of trending items
+
+  /content/{id}:
+    get:
+      summary: Get detailed content information
+      operationId: getContent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Content details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentDetail'
+        '404':
+          description: Content not found
+
+components:
+  schemas:
+    ContentCard:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        type:
+          type: string
+          enum: [movie, tv]
+        poster_path:
+          type: string
+        backdrop_path:
+          type: string
+        overview:
+          type: string
+        genres:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+        rating:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 10
+        release_date:
+          type: string
+          format: date
+        vote_stats:
+          type: object
+          properties:
+            total_votes:
+              type: integer
+            average_score:
+              type: number
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+          minimum: 1
+          maximum: 10
+        content_id:
+          type: integer
+        title:
+          type: string
+        type:
+          type: string
+          enum: [movie, tv]
+        poster_path:
+          type: string
+        total_score:
+          type: integer
+        positive_votes:
+          type: integer
+        negative_votes:
+          type: integer
+        neutral_votes:
+          type: integer
+        vote_percentage:
+          type: object
+          properties:
+            positive:
+              type: number
+            negative:
+              type: number
+            neutral:
+              type: number
+
+    ContentDetail:
+      allOf:
+        - $ref: '#/components/schemas/ContentCard'
+        - type: object
+          properties:
+            cast:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  character:
+                    type: string
+                  profile_path:
+                    type: string
+            director:
+              type: string
+            runtime:
+              type: integer
+              description: Runtime in minutes
+            seasons:
+              type: integer
+              description: Number of seasons (TV only)
+            episodes:
+              type: integer
+              description: Number of episodes (TV only)
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
