@@ -52,10 +52,12 @@ class TMDBClient {
 
     for (let i = 0; i < retries; i++) {
       try {
-        const response = await fetch(url, {
+        // Add API key to URL
+        const urlWithKey = `${url}${url.includes('?') ? '&' : '?'}api_key=${this.apiKey}`
+
+        const response = await fetch(urlWithKey, {
           ...options,
           headers: {
-            'Authorization': `Bearer ${this.readAccessToken}`,
             'Content-Type': 'application/json',
             ...options?.headers,
           },
